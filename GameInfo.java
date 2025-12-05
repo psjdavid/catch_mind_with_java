@@ -24,6 +24,10 @@ public class GameInfo {
 		 return playerList;
 	 }
 	 
+	 public HashMap<String, Integer> getGameState(){
+		 return player;
+	 }
+	 
 	 public int getScore(String name) {	// player 점수 반환
 		 return player.get(name);
 	 }
