@@ -220,6 +220,24 @@ public class PlayerAnswerFrame extends JFrame {
                             JOptionPane.showMessageDialog(PlayerAnswerFrame.this, "정답입니다!");
                             answerField.setEnabled(false); // 정답 맞춘 사람만 입력 비활성화
                         });
+                    } else if (msg.startsWith("CORRECT_PLAYER:")) {
+                        // 다른 플레이어가 정답을 맞췄을 때
+                        String[] parts = msg.substring(15).split(":");
+                        if (parts.length >= 2) {
+                            String correctPlayer = parts[0];
+                            String correctAnswer = parts[1];
+                            SwingUtilities.invokeLater(() -> {
+                                JOptionPane.showMessageDialog(PlayerAnswerFrame.this,
+                                        correctPlayer + "님이 정답을 맞췄습니다!\n정답: " + correctAnswer);
+                            });
+                        }
+                    } else if (msg.startsWith("ANSWER_REVEAL:")) {
+                        // 다음 라운드로 넘어갈 때 정답 공개
+                        String answer = msg.substring(14);
+                        SwingUtilities.invokeLater(() -> {
+                            JOptionPane.showMessageDialog(PlayerAnswerFrame.this,
+                                    "다음 라운드로 넘어갑니다\n정답: " + answer);
+                        });
                     } else if (msg.startsWith("NEW_ROUND")) {
                         // 새 라운드 시작 시 입력창 다시 활성화 및 그림 지우기
                         SwingUtilities.invokeLater(() -> {
@@ -233,6 +251,20 @@ public class PlayerAnswerFrame extends JFrame {
                         SwingUtilities.invokeLater(() -> {
                             new PlayerScoreFrame(playerSocket, playerLabel.getText());
                             dispose();
+                        });
+                    } else if (msg.equals("SHUTDOWN")) {
+                        // 호스트가 게임 종료
+                        SwingUtilities.invokeLater(() -> {
+                            JOptionPane.showMessageDialog(PlayerAnswerFrame.this,
+                                    "호스트가 게임을 종료했습니다.");
+                            try {
+                                if (playerSocket != null && !playerSocket.isClosed()) {
+                                    playerSocket.close();
+                                }
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                            System.exit(0);
                         });
                     }
                 }

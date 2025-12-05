@@ -5,6 +5,7 @@ import java.io.*;
 //animal, food, object 문제 출제
 class Problem {
 	private List<String> wordList = new ArrayList<>();
+	private List<String> usedWords = new ArrayList<>(); // 이미 사용한 단어 목록
 	private String animalFile = "src/data/catchmind_words_animal.txt";
 	private String foodFile = "src/data/catchmind_words_food.txt";
 	private String objectFile = "src/data/catchmind_words_object.txt";
@@ -33,9 +34,30 @@ class Problem {
 
 	public String randomWord() {
 		if (wordList.isEmpty()) return "단어없음";
-		int index = (int) (Math.random() * wordList.size());
-		word = wordList.get(index);
+
+		// 사용 가능한 단어 목록 (아직 사용하지 않은 단어)
+		List<String> availableWords = new ArrayList<>();
+		for (String w : wordList) {
+			if (!usedWords.contains(w)) {
+				availableWords.add(w);
+			}
+		}
+
+		// 모든 단어를 사용했으면 usedWords 초기화
+		if (availableWords.isEmpty()) {
+			usedWords.clear();
+			availableWords = new ArrayList<>(wordList);
+		}
+
+		int index = (int) (Math.random() * availableWords.size());
+		word = availableWords.get(index);
+		usedWords.add(word); // 사용한 단어 목록에 추가
 		return word;
+	}
+
+	// 게임 재시작 시 사용한 단어 목록 초기화
+	public void reset() {
+		usedWords.clear();
 	}
 }
 
@@ -47,9 +69,9 @@ public class MainServer {
 	private static GameInfo gameInfo = new GameInfo();
 	private static List<PrintWriter> playerWriters = new ArrayList<>();
 	private static Map<Socket, String> playerNames = new HashMap<>();
-	private static Timer roundTimer; // 라운드 타이머
-	private static List<String> customWords = new ArrayList<>(); // 사용자 직접 출제할 때의 단어 목록 -> 위대하신 혜린님의 아이디어
+	private static List<String> customWords = new ArrayList<>(); // 사용자 직접 출제 단어 목록
 	private static int customWordIndex = 0; // 현재 사용 중인 custom 단어 인덱스
+	private static Problem currentProblem = null; // 현재 카테고리의 Problem 인스턴스
 
 	public static void main(String[] args) {
 		// Host TCP 서버
@@ -104,8 +126,8 @@ public class MainServer {
 
 					if (msg.equals("animal") || msg.equals("food") || msg.equals("object")) {
 						gameInfo.setCategory(msg);
-						Problem problem = new Problem(gameInfo.getCategory());
-						String newWord = problem.randomWord();
+						currentProblem = new Problem(gameInfo.getCategory()); // 새 Problem 생성
+						String newWord = currentProblem.randomWord();
 						gameInfo.setWord(newWord);
 						out.println("WORD:" + newWord);
 						out.println("ROUND:" + gameInfo.getCurrentRound());
@@ -115,8 +137,8 @@ public class MainServer {
 						broadcastToPlayers("ROUND:" + gameInfo.getCurrentRound());
 						broadcastToPlayers("NEW_ROUND");
 
-						// 60초 타이머 시작 (자동 다음 라운드)
-						startRoundTimer();
+						// 초기 점수 브로드캐스트 (Host에게도)
+						broadcastScores();
 
 					} else if (msg.equals("custom")) {
 						gameInfo.setCategory(msg);
@@ -144,11 +166,12 @@ public class MainServer {
 							broadcastToPlayers("ROUND:" + gameInfo.getCurrentRound());
 							broadcastToPlayers("NEW_ROUND");
 
-							startRoundTimer();
+							// 초기 점수 브로드캐스트 (Host에게도)
+							broadcastScores();
 						}
 
 					} else if (msg.startsWith("CUSTOM_WORD:")) {
-						// 사용자 직접 출제
+						// 사용자 직접 출제 (더 이상 사용 안 함 - CUSTOM_WORDS 사용)
 						String customWord = msg.substring(12);
 						gameInfo.setWord(customWord);
 						out.println("WORD:" + customWord);
@@ -158,10 +181,10 @@ public class MainServer {
 						broadcastToPlayers("ROUND:" + gameInfo.getCurrentRound());
 						broadcastToPlayers("NEW_ROUND");
 
-						startRoundTimer();
-
 					} else if (msg.equals("Next")) {
-						cancelRoundTimer(); // 기존 타이머 취소
+						// 현재 정답 저장
+						String currentAnswer = gameInfo.getWord();
+						Set<String> answeredPlayers = gameInfo.getAnsweredPlayers();
 
 						if (gameInfo.nextRound()) {
 							if ("custom".equals(gameInfo.getCategory())) {
@@ -173,11 +196,12 @@ public class MainServer {
 									out.println("WORD:" + nextWord);
 									out.println("ROUND:" + gameInfo.getCurrentRound());
 
+									// 정답 못 맞춘 플레이어들에게만 정답 알림
+									broadcastAnswerReveal(currentAnswer, answeredPlayers);
+
 									broadcastToPlayers("HINT:" + gameInfo.getHint());
 									broadcastToPlayers("ROUND:" + gameInfo.getCurrentRound());
 									broadcastToPlayers("NEW_ROUND");
-
-									startRoundTimer();
 								} else {
 									// 단어 목록이 끝남
 									out.println("GAME_END");
@@ -185,17 +209,17 @@ public class MainServer {
 									broadcastToPlayers("GAME_END");
 								}
 							} else {
-								Problem problem = new Problem(gameInfo.getCategory());
-								String newWord = problem.randomWord();
+								String newWord = currentProblem.randomWord(); // 같은 인스턴스 사용
 								gameInfo.setWord(newWord);
 								out.println("WORD:" + newWord);
 								out.println("ROUND:" + gameInfo.getCurrentRound());
 
+								// 정답 못 맞춘 플레이어들에게만 정답 알림
+								broadcastAnswerReveal(currentAnswer, answeredPlayers);
+
 								broadcastToPlayers("HINT:" + gameInfo.getHint());
 								broadcastToPlayers("ROUND:" + gameInfo.getCurrentRound());
 								broadcastToPlayers("NEW_ROUND");
-
-								startRoundTimer();
 							}
 						} else {
 							out.println("GAME_END");
@@ -204,9 +228,12 @@ public class MainServer {
 						}
 					} else if (msg.equals("RESTART")) {
 						// 게임 재시작 신호를 모든 플레이어에게 브로드캐스트
-						cancelRoundTimer();
 						broadcastToPlayers("RESTART");
 						System.out.println("[SERVER] 게임 재시작");
+					} else if (msg.equals("SHUTDOWN")) {
+						// 호스트가 게임 종료 - 모든 플레이어에게 종료 신호 전송
+						broadcastToPlayers("SHUTDOWN");
+						System.out.println("[SERVER] 게임 종료 - 모든 클라이언트 종료");
 					}
 				}
 			} catch (Exception e) {
@@ -263,6 +290,17 @@ public class MainServer {
 								out.println("CORRECT");
 								System.out.println("[PLAYER] " + playerName + " 정답!");
 
+								// 정답자를 제외한 나머지 플레이어들에게만 정답자 알림
+								String correctMsg = "CORRECT_PLAYER:" + playerName + ":" + gameInfo.getWord();
+								synchronized (playerWriters) {
+									for (int i = 0; i < playerWriters.size(); i++) {
+										PrintWriter writer = playerWriters.get(i);
+										if (writer != out) { // 정답자 본인은 제외
+											writer.println(correctMsg);
+										}
+									}
+								}
+
 								// 모든 플레이어에게 점수 업데이트 브로드캐스트
 								broadcastScores();
 
@@ -279,7 +317,6 @@ public class MainServer {
 									}, 3000);
 								}
 							}
-							// WRONG 메시지 제거 - 틀려도 계속 도전 가능
 						}
 					}
 				}
@@ -305,6 +342,32 @@ public class MainServer {
 			}
 		}
 	}
+
+	// 정답 못 맞춘 플레이어들에게만 정답 알림 브로드캐스트
+	private static void broadcastAnswerReveal(String answer, Set<String> answeredPlayers) {
+		String msg = "ANSWER_REVEAL:" + answer;
+
+		synchronized (playerWriters) {
+			// playerNames: Socket -> 플레이어 닉네임
+			for (Map.Entry<Socket, String> entry : playerNames.entrySet()) {
+				String playerName = entry.getValue();
+
+				// 정답 맞춘 플레이어는 건너뜀
+				if (answeredPlayers.contains(playerName)) {
+					continue;
+				}
+
+				try {
+					PrintWriter writer = new PrintWriter(entry.getKey().getOutputStream(), true);
+					writer.println(msg);
+				} catch (Exception e) {
+					// 소켓 끊긴 경우 등은 무시
+					System.out.println("[SERVER] ANSWER_REVEAL 전송 실패: " + e.getMessage());
+				}
+			}
+		}
+	}
+
 
 	// 점수 브로드캐스트
 	private static void broadcastScores() {
@@ -341,30 +404,11 @@ public class MainServer {
 		}
 	}
 
-	// 라운드 타이머 시작 (60초)
-	private static void startRoundTimer() {
-		cancelRoundTimer();
-		roundTimer = new Timer();
-		roundTimer.schedule(new TimerTask() {
-			@Override
-			public void run() {
-				System.out.println("[SERVER] 시간 종료! 다음 라운드로...");
-				nextRound();
-			}
-		}, 60000); // 60초
-	}
-
-	// 타이머 취소
-	private static void cancelRoundTimer() {
-		if (roundTimer != null) {
-			roundTimer.cancel();
-			roundTimer = null;
-		}
-	}
-
 	// 다음 라운드로 진행
 	private static void nextRound() {
-		cancelRoundTimer();
+		// 현재 정답 저장
+		String currentAnswer = gameInfo.getWord();
+		Set<String> answeredPlayers = gameInfo.getAnsweredPlayers();
 
 		if (gameInfo.nextRound()) {
 			if ("custom".equals(gameInfo.getCategory())) {
@@ -377,11 +421,12 @@ public class MainServer {
 					sendToHost("WORD:" + nextWord);
 					sendToHost("ROUND:" + gameInfo.getCurrentRound());
 
+					// 정답 못 맞춘 플레이어들에게만 정답 알림
+					broadcastAnswerReveal(currentAnswer, answeredPlayers);
+
 					broadcastToPlayers("HINT:" + gameInfo.getHint());
 					broadcastToPlayers("ROUND:" + gameInfo.getCurrentRound());
 					broadcastToPlayers("NEW_ROUND");
-
-					startRoundTimer();
 				} else {
 					// 단어 목록이 끝남
 					sendToHost("GAME_END");
@@ -389,18 +434,18 @@ public class MainServer {
 					broadcastToPlayers("GAME_END");
 				}
 			} else {
-				Problem problem = new Problem(gameInfo.getCategory());
-				String newWord = problem.randomWord();
+				String newWord = currentProblem.randomWord(); // 같은 인스턴스 사용
 				gameInfo.setWord(newWord);
 
 				sendToHost("WORD:" + newWord);
 				sendToHost("ROUND:" + gameInfo.getCurrentRound());
 
+				// 정답 못 맞춘 플레이어들에게만 정답 알림
+				broadcastAnswerReveal(currentAnswer, answeredPlayers);
+
 				broadcastToPlayers("HINT:" + gameInfo.getHint());
 				broadcastToPlayers("ROUND:" + gameInfo.getCurrentRound());
 				broadcastToPlayers("NEW_ROUND");
-
-				startRoundTimer();
 			}
 		} else {
 			// 게임 종료

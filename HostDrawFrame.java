@@ -40,16 +40,27 @@ public class HostDrawFrame extends JFrame {
 
 		mainPanel = new JPanel(new BorderLayout());
 
-		// 상단 패널: 라운드, 단어, 플레이어 점수
-		topPanel = new JPanel(new GridLayout(3,1));
+		// 상단 패널: 라운드, 단어
+		topPanel = new JPanel(new GridLayout(2,1));
 		roundLabel = new JLabel("", SwingConstants.CENTER);
 		wordLabel = new JLabel("", SwingConstants.CENTER);
 		wordLabel.setFont(wordLabel.getFont().deriveFont(Font.BOLD, 22f));
-		playerLabel = new JLabel("", SwingConstants.CENTER);
 		topPanel.add(roundLabel);
 		topPanel.add(wordLabel);
-		topPanel.add(playerLabel);
 		mainPanel.add(topPanel, BorderLayout.NORTH);
+
+		// 왼쪽 패널: 플레이어 점수
+		JPanel leftPanel = new JPanel(new BorderLayout());
+		leftPanel.setBorder(BorderFactory.createTitledBorder("플레이어 점수"));
+		leftPanel.setPreferredSize(new Dimension(180, 0));
+
+		playerLabel = new JLabel("", SwingConstants.LEFT);
+		playerLabel.setFont(playerLabel.getFont().deriveFont(14f));
+		playerLabel.setVerticalAlignment(SwingConstants.TOP);
+		JScrollPane playerScroll = new JScrollPane(playerLabel);
+		playerScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+		leftPanel.add(playerScroll, BorderLayout.CENTER);
+		mainPanel.add(leftPanel, BorderLayout.WEST);
 
 		// 그림판
 		drawingPanel = new DrawingPanel(sender);
@@ -102,18 +113,17 @@ public class HostDrawFrame extends JFrame {
 	}
 
 	private void initTurn() {
+		// 라운드/단어만 호스트 쪽 GameInfo로 갱신
 		roundLabel.setText(gameInfo.getCurrentRound() + " / 10");
 		wordLabel.setText(gameInfo.getWord());
 
-		StringBuilder sb = new StringBuilder("<html>");
-		for (Map.Entry<String, Integer> entry : gameInfo.getGameState().entrySet()) {
-			sb.append(entry.getKey()).append(": ").append(entry.getValue()).append("<br>");
-		}
-		sb.append("</html>");
-		playerLabel.setText(sb.toString());
+		// ❌ 점수는 여기서 건드리지 말고,
+		// ✅ 서버에서 오는 "SCORES:" 메세지에서만 갱신하도록 둔다.
+		// playerLabel.setText(...) 부분 삭제
 
 		drawingPanel.clear();
 	}
+
 
 	private void startReceiver() {
 		new Thread(() -> {

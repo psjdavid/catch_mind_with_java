@@ -30,13 +30,14 @@ public class HostScoreFrame extends JFrame{
         title = new JLabel("최종 점수", SwingConstants.CENTER);
         title.setFont(title.getFont().deriveFont(Font.BOLD, 24f));
 
-        scoreArea = new JTextArea();
-        scoreArea.setFont(scoreArea.getFont().deriveFont(Font.BOLD, 20f));
-        scoreArea.setEditable(false);
+        // 중앙 정렬을 위한 JTextPane 사용
+        JTextPane scorePane = new JTextPane();
+        scorePane.setFont(scorePane.getFont().deriveFont(Font.BOLD, 20f));
+        scorePane.setEditable(false);
 
         // 점수 표시
         if (finalScores == null || finalScores.isEmpty()) {
-            scoreArea.setText("플레이어가 없습니다.");
+            scorePane.setText("플레이어가 없습니다.");
         } else {
             StringBuilder sb = new StringBuilder();
             String[] entries = finalScores.split(",");
@@ -46,12 +47,18 @@ public class HostScoreFrame extends JFrame{
                     sb.append(parts[0]).append(": ").append(parts[1]).append("점\n");
                 }
             }
-            scoreArea.setText(sb.toString());
+            scorePane.setText(sb.toString());
         }
+
+        // 중앙 정렬 설정
+        javax.swing.text.StyledDocument doc = scorePane.getStyledDocument();
+        javax.swing.text.SimpleAttributeSet center = new javax.swing.text.SimpleAttributeSet();
+        javax.swing.text.StyleConstants.setAlignment(center, javax.swing.text.StyleConstants.ALIGN_CENTER);
+        doc.setParagraphAttributes(0, doc.getLength(), center, false);
 
         centerPanel = new JPanel();
         centerPanel.setLayout(new BorderLayout());
-        centerPanel.add(scoreArea, BorderLayout.CENTER);
+        centerPanel.add(scorePane, BorderLayout.CENTER);
         centerPanel.setBackground(Color.white);
 
         bottom = new JPanel();
@@ -77,6 +84,12 @@ public class HostScoreFrame extends JFrame{
 
         endBtn.addActionListener(e -> {
             try {
+                // 모든 플레이어에게 종료 신호 전송
+                out.println("SHUTDOWN");
+
+                // 잠시 대기 후 소켓 종료
+                Thread.sleep(500);
+
                 if (hostsocket != null && !hostsocket.isClosed()) {
                     hostsocket.close();
                 }

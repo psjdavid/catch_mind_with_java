@@ -91,6 +91,11 @@ public class GameInfo {
 		return answeredPlayers.size() == playerList.size();
 	}
 
+	// 정답 맞춘 플레이어 목록 반환
+	public Set<String> getAnsweredPlayers() {
+		return new HashSet<>(answeredPlayers);
+	}
+
 	// 힌트 생성 (글자 수만큼 _ 표시)
 	public String getHint() {
 		if (word == null) return "";

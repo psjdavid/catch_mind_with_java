@@ -29,6 +29,13 @@ public class PlayerScoreFrame extends JFrame{
         scoreArea = new JTextArea();
         scoreArea.setFont(scoreArea.getFont().deriveFont(Font.BOLD, 20f));
         scoreArea.setEditable(false);
+        scoreArea.setLineWrap(true);
+        scoreArea.setWrapStyleWord(true);
+
+        // 중앙 정렬을 위한 StyledDocument 사용
+        JTextPane scorePane = new JTextPane();
+        scorePane.setFont(scorePane.getFont().deriveFont(Font.BOLD, 20f));
+        scorePane.setEditable(false);
 
         // HTML 태그 제거하고 점수 표시
         String cleanScores = finalScores.replaceAll("<html>", "")
@@ -37,14 +44,20 @@ public class PlayerScoreFrame extends JFrame{
                 .trim();
 
         if (cleanScores.isEmpty()) {
-            scoreArea.setText("점수 정보가 없습니다.");
+            scorePane.setText("점수 정보가 없습니다.");
         } else {
-            scoreArea.setText(cleanScores);
+            scorePane.setText(cleanScores);
         }
+
+        // 중앙 정렬 설정
+        javax.swing.text.StyledDocument doc = scorePane.getStyledDocument();
+        javax.swing.text.SimpleAttributeSet center = new javax.swing.text.SimpleAttributeSet();
+        javax.swing.text.StyleConstants.setAlignment(center, javax.swing.text.StyleConstants.ALIGN_CENTER);
+        doc.setParagraphAttributes(0, doc.getLength(), center, false);
 
         centerPanel = new JPanel();
         centerPanel.setLayout(new BorderLayout());
-        centerPanel.add(scoreArea, BorderLayout.CENTER);
+        centerPanel.add(scorePane, BorderLayout.CENTER);
         centerPanel.setBackground(Color.white);
 
         bottom = new JPanel();
@@ -88,10 +101,25 @@ public class PlayerScoreFrame extends JFrame{
                             dispose();
                         });
                         break;
+                    } else if (msg.equals("SHUTDOWN")) {
+                        // 호스트가 게임 종료 - 프로그램 종료
+                        SwingUtilities.invokeLater(() -> {
+                            JOptionPane.showMessageDialog(PlayerScoreFrame.this,
+                                    "호스트가 게임을 종료했습니다.");
+                            try {
+                                if (playerSocket != null && !playerSocket.isClosed()) {
+                                    playerSocket.close();
+                                }
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                            System.exit(0);
+                        });
+                        break;
                     }
                 }
             } catch (Exception e) {
-                System.out.println("[PLAYER] RESTART 수신 실패");
+                System.out.println("[PLAYER] 메시지 수신 실패");
             }
         }).start();
     }
