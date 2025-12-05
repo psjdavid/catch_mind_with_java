@@ -10,12 +10,10 @@ public class HostHomeFrame extends JFrame{
 	private JLabel title;
 	private JButton animalBtn, foodBtn, objectBtn, customBtn;
 	Socket hostsocket = null;
-	//DatagramSocket drawsokcet = null;
 	PrintWriter out = null;
 	
 	public HostHomeFrame(Socket hostsocket) throws IOException{
 		this.hostsocket = hostsocket;
-		//this.drawsokcet = drawsokcet;
 		out = new PrintWriter(hostsocket.getOutputStream(), true);
 		
 		setTitle("CatchMind - 출제자");
@@ -38,7 +36,7 @@ public class HostHomeFrame extends JFrame{
         //TODO 각 버튼 클릭시 각 카테고리 정보를 서버로 전송하고 다음 페이지로 넘어가는 액션 이벤트 추가
         animalBtn.addActionListener(e -> {
         	out.println("animal");
-            new HostDrawFrame(hostsocket);
+        	new HostDrawFrame(hostsocket);
             dispose();
         });
         
